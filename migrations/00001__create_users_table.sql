@@ -1,0 +1,6 @@
+CREATE TABLE users (
+    user_id VARCHAR(80) PRIMARY KEY,
+    name VARCHAR(80) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

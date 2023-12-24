@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:14.1-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=banking
+    ports:
+      - '5432:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+    networks:
+      - banking
+
+  banking:
+    container_name: banking_service
+    build: .
+    ports:
+      - "8081:8081"
+    restart: always
+    environment:
+      BANKING_DB_PORT: "5432"
+      BANKING_DB_HOST: "db"
+      BANKING_DB_USERNAME: "postgres"
+      BANKING_DB_PASSWORD: "postgres"
+      BANKING_DB_NAME: "banking"
+      BANKING_SERVICE_PORT: "8081"
+    depends_on:
+      - db
+    networks:
+      - banking
+
+volumes:
+  db:
+    driver: local
+
+networks:
+  banking:
