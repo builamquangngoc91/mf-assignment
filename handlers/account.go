@@ -5,15 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"banking-service/domains"
 	"banking-service/enums"
 	"banking-service/models"
 	"banking-service/repositories"
+	"banking-service/utilities"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -33,11 +34,13 @@ type AccountHandlers interface {
 }
 
 type AccountHandlersDeps struct {
-	DB *gorm.DB
+	DB          *gorm.DB
+	IDGenerator utilities.SnowflakeIDGenerator
 }
 
 type accountHandlers struct {
 	db                    *gorm.DB
+	idGenerator           utilities.SnowflakeIDGenerator
 	accountRepository     repositories.AccountRepositoryI
 	transactionRepository repositories.TransactionRepositoryI
 }
@@ -49,6 +52,7 @@ func NewAccountHandlers(deps *AccountHandlersDeps) AccountHandlers {
 
 	return &accountHandlers{
 		db:                    deps.DB,
+		idGenerator:           deps.IDGenerator,
 		accountRepository:     repositories.NewAccountRepository(),
 		transactionRepository: repositories.NewTransactionRepository(),
 	}
@@ -81,7 +85,7 @@ func (u *accountHandlers) CreateAccountHandler(c *gin.Context) {
 	}
 
 	account := &models.Account{
-		AccountID: uuid.NewString(),
+		AccountID: u.idGenerator.Next().String(),
 		UserID:    req.UserID,
 		Name:      req.Name,
 		Balance:   0,
@@ -108,8 +112,29 @@ func (u *accountHandlers) CreateAccountHandler(c *gin.Context) {
 
 func (u *accountHandlers) GetAccountsHandler(c *gin.Context) {
 	ctx := c.Request.Context()
+	limitStr := c.Query("limit")
+	cursorStr := c.Query("cursor")
 
-	accounts, err := u.accountRepository.GetAccounts(ctx, u.db, &repositories.GetAccountsArgs{})
+	fmt.Println("limit: " + limitStr)
+
+	var (
+		limit int
+		err   error
+	)
+	if limitStr != "" {
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, domains.ErrorResp{
+				Message: err.Error(),
+			})
+			return
+		}
+	}
+
+	accounts, err := u.accountRepository.GetAccounts(ctx, u.db, &repositories.GetAccountsArgs{
+		Cursor: cursorStr,
+		Limit:  limit,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, domains.ErrorResp{
 			Message: err.Error(),
@@ -130,8 +155,13 @@ func (u *accountHandlers) GetAccountsHandler(c *gin.Context) {
 		})
 	}
 
+	var nextCursor string
+	if len(accounts) != 0 {
+		nextCursor = accounts[len(accounts)-1].AccountID
+	}
 	c.JSON(http.StatusOK, &domains.GetAccountsResponse{
-		Accounts: accountsResp,
+		Accounts:   accountsResp,
+		NextCursor: nextCursor,
 	})
 }
 
@@ -204,7 +234,7 @@ func (u *accountHandlers) DepositAccountHandler(c *gin.Context) {
 			return domains.NewXError(err, enums.InternalError)
 		}
 
-		transactionID = uuid.NewString()
+		transactionID = u.idGenerator.Next().String()
 		transaction := &models.Transaction{
 			TransactionID: transactionID,
 			UserID:        account.UserID,
@@ -276,7 +306,7 @@ func (u *accountHandlers) WithdrawAccountHandler(c *gin.Context) {
 			return domains.NewXError(err, enums.InternalError)
 		}
 
-		transactionID = uuid.NewString()
+		transactionID = u.idGenerator.Next().String()
 		transaction := &models.Transaction{
 			TransactionID: transactionID,
 			UserID:        account.UserID,
@@ -365,7 +395,7 @@ func (u *accountHandlers) TransferAmountHandler(c *gin.Context) {
 			return domains.NewXError(err, enums.InternalError)
 		}
 
-		transactionID = uuid.NewString()
+		transactionID = u.idGenerator.Next().String()
 		transaction := &models.Transaction{
 			TransactionID: transactionID,
 			UserID:        account.UserID,
@@ -383,7 +413,7 @@ func (u *accountHandlers) TransferAmountHandler(c *gin.Context) {
 		}
 
 		transactionDestination := &models.Transaction{
-			TransactionID: uuid.NewString(),
+			TransactionID: u.idGenerator.Next().String(),
 			UserID:        destinationAccount.UserID,
 			AccountID:     destinationAccount.AccountID,
 			Amount:        req.Amount,

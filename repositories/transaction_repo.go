@@ -16,8 +16,9 @@ type (
 		ID string
 	}
 	GetTransactionsArgs struct {
-		UserID    string
 		AccountID string
+		Cursor    string
+		Limit     int
 	}
 
 	TransactionRepositoryI interface {
@@ -59,12 +60,18 @@ func (TransactionRepository) GetTransactions(ctx context.Context, db *gorm.DB, a
 		WithContext(ctx).
 		Table("transactions")
 
-	if args.UserID != "" {
-		db.Where("user_id = ?", args.UserID)
-	}
 	if args.AccountID != "" {
 		db.Where("account_id = ?", args.AccountID)
 	}
+	if args.Cursor != "" {
+		db.Where("transaction_id < ?", args.Cursor)
+	}
+	if args.Limit == 0 {
+		args.Limit = 100
+	}
+	db.Order("transaction_id DESC")
+	db.Limit(args.Limit)
+
 	err = db.Find(&transactions).Error
 
 	return

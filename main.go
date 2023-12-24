@@ -11,6 +11,7 @@ import (
 
 	"banking-service/configs"
 	"banking-service/handlers"
+	"banking-service/utilities"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -81,20 +82,29 @@ func main() {
 	router := gin.Default()
 
 	// TODO: add ping and health
+	snowflakeIDGenerator, err := utilities.NewSnowflakeIDGenerator()
+	if err != nil {
+		logger.Sugar().Errorf("new snowflakeIDGenerator error: %s", err.Error())
+		return
+	}
+
 	accountHandlersDeps := &handlers.AccountHandlersDeps{
-		DB: db,
+		DB:          db,
+		IDGenerator: snowflakeIDGenerator,
 	}
 	accountHandlers := handlers.NewAccountHandlers(accountHandlersDeps)
 	accountHandlers.RouteGroup(router)
 
 	userHandlersDeps := &handlers.UserHandlersDeps{
-		DB: db,
+		DB:          db,
+		IDGenerator: snowflakeIDGenerator,
 	}
 	userHandlers := handlers.NewUserHandlers(userHandlersDeps)
 	userHandlers.RouteGroup(router)
 
 	transactionHandlersDeps := &handlers.TransactionHandlersDeps{
-		DB: db,
+		DB:          db,
+		IDGenerator: snowflakeIDGenerator,
 	}
 	transactionHandlers := handlers.NewTransactionHandlers(transactionHandlersDeps)
 	transactionHandlers.RouteGroup(router)

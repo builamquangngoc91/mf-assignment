@@ -18,5 +18,6 @@ type (
 
 	GetTransactionsResp struct {
 		Transactions []*Transaction `json:"transactions"`
+		NextCursor   string         `json:"next_cursor"`
 	}
 )

@@ -23,6 +23,8 @@ type (
 
 	GetAccountsArgs struct {
 		UserID string
+		Cursor string
+		Limit  int
 	}
 
 	GetAccountIDsArgs struct {
@@ -79,6 +81,14 @@ func (accountRepository) GetAccounts(ctx context.Context, db *gorm.DB, args *Get
 	if args.UserID != "" {
 		db.Where("user_id = ?", args.UserID)
 	}
+	if args.Cursor != "" {
+		db.Where("account_id < ?", args.Cursor)
+	}
+	if args.Limit == 0 {
+		args.Limit = 100
+	}
+	db.Limit(args.Limit)
+	db.Order("account_id DESC")
 	db.Where("deleted_at IS NULL")
 	err = db.Find(&accounts).Error
 

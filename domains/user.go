@@ -23,6 +23,7 @@ type (
 	}
 
 	GetUsersResponse struct {
-		Users []*User `json:"users"`
+		Users      []*User `json:"users"`
+		NextCursor string  `json:"cursor"`
 	}
 )

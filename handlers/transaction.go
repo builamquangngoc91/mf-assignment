@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"banking-service/domains"
 	"banking-service/repositories"
+	"banking-service/utilities"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,11 +23,13 @@ type TransactionHandlers interface {
 }
 
 type TransactionHandlersDeps struct {
-	DB *gorm.DB
+	DB          *gorm.DB
+	IDGenerator utilities.SnowflakeIDGenerator
 }
 
 type transactionHandlers struct {
 	db                    *gorm.DB
+	idGenerator           utilities.SnowflakeIDGenerator
 	userRepositiory       repositories.UserRepositoryI
 	accountRepository     repositories.AccountRepositoryI
 	transactionRepository repositories.TransactionRepositoryI
@@ -38,6 +42,7 @@ func NewTransactionHandlers(deps *TransactionHandlersDeps) TransactionHandlers {
 
 	return &transactionHandlers{
 		db:                    deps.DB,
+		idGenerator:           deps.IDGenerator,
 		userRepositiory:       repositories.NewUserRepository(),
 		accountRepository:     repositories.NewAccountRepository(),
 		transactionRepository: repositories.NewTransactionRepository(),
@@ -50,13 +55,33 @@ func (u *transactionHandlers) RouteGroup(rg *gin.Engine) {
 
 func (u *transactionHandlers) GetAccountTransactionsHandler(c *gin.Context) {
 	ctx := c.Request.Context()
-	accountID := c.Param("accountID")
+	accountIDStr := c.Param("accountID")
+	limitStr := c.Query("limit")
+	cursorStr := c.Query("cursor")
+
+	var (
+		limit int
+		err   error
+	)
+	if limitStr != "" {
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, domains.ErrorResp{
+				Message: err.Error(),
+			})
+			return
+		}
+	}
 
 	transactions, err := u.transactionRepository.GetTransactions(ctx, u.db, &repositories.GetTransactionsArgs{
-		AccountID: accountID,
+		AccountID: accountIDStr,
+		Cursor:    cursorStr,
+		Limit:     limit,
 	})
 	if err != nil {
-		c.Error(err)
+		c.JSON(http.StatusBadRequest, domains.ErrorResp{
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -76,7 +101,12 @@ func (u *transactionHandlers) GetAccountTransactionsHandler(c *gin.Context) {
 		})
 	}
 
+	var nextCursor string
+	if len(transactions) != 0 {
+		nextCursor = transactions[len(transactions)-1].TransactionID
+	}
 	c.JSON(http.StatusOK, &domains.GetTransactionsResp{
 		Transactions: transactionsResp,
+		NextCursor:   nextCursor,
 	})
 }

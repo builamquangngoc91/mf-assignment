@@ -45,12 +45,23 @@ func (u *userRepository) GetUser(ctx context.Context, db *gorm.DB, args *GetUser
 }
 
 type GetUsersArgs struct {
-	IDs []string
+	Cursor string
+	Limit  int
 }
 
 func (u *userRepository) GetUsers(ctx context.Context, db *gorm.DB, args *GetUsersArgs) (users []*models.User, _ error) {
-	query := db.WithContext(ctx).Table("users")
-	result := query.Find(&users)
+	db = db.WithContext(ctx).Table("users")
+	if args.Cursor != "" {
+		db.Where("user_id < ?", args.Cursor)
+	}
+	if args.Limit == 0 {
+		args.Limit = 100
+	}
+
+	db.Order("user_id DESC")
+	db.Limit(args.Limit)
+
+	result := db.Find(&users)
 
 	return users, result.Error
 }

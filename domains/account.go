@@ -21,7 +21,8 @@ type (
 	}
 
 	GetAccountsResponse struct {
-		Accounts []*Account `json:"accounts"`
+		Accounts   []*Account `json:"accounts"`
+		NextCursor string     `json:"next_cursor"`
 	}
 
 	DepositAccountRequest struct {

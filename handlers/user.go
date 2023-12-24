@@ -2,14 +2,15 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"banking-service/domains"
 	"banking-service/models"
 	"banking-service/repositories"
+	"banking-service/utilities"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -26,11 +27,13 @@ type UserHandlers interface {
 }
 
 type UserHandlersDeps struct {
-	DB *gorm.DB
+	DB          *gorm.DB
+	IDGenerator utilities.SnowflakeIDGenerator
 }
 
 type userHandlers struct {
 	db                *gorm.DB
+	idGenerator       utilities.SnowflakeIDGenerator
 	userRepositiory   repositories.UserRepositoryI
 	accountRepository repositories.AccountRepositoryI
 }
@@ -42,6 +45,7 @@ func NewUserHandlers(deps *UserHandlersDeps) UserHandlers {
 
 	return &userHandlers{
 		db:                deps.DB,
+		idGenerator:       deps.IDGenerator,
 		userRepositiory:   repositories.NewUserRepository(),
 		accountRepository: repositories.NewAccountRepository(),
 	}
@@ -71,7 +75,7 @@ func (u *userHandlers) CreateUserHandler(c *gin.Context) {
 	}
 
 	user := &models.User{
-		UserID:    uuid.NewString(),
+		UserID:    u.idGenerator.Next().String(),
 		Name:      req.Name,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -93,8 +97,27 @@ func (u *userHandlers) CreateUserHandler(c *gin.Context) {
 
 func (u *userHandlers) GetUsersHandler(c *gin.Context) {
 	ctx := c.Request.Context()
+	limitStr := c.Query("limit")
+	cursorStr := c.Query("cursor")
 
-	users, err := u.userRepositiory.GetUsers(ctx, u.db, &repositories.GetUsersArgs{})
+	var (
+		limit int
+		err   error
+	)
+	if limitStr != "" {
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, domains.ErrorResp{
+				Message: err.Error(),
+			})
+			return
+		}
+	}
+
+	users, err := u.userRepositiory.GetUsers(ctx, u.db, &repositories.GetUsersArgs{
+		Cursor: cursorStr,
+		Limit:  limit,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, domains.ErrorResp{
 			Message: err.Error(),
@@ -112,8 +135,13 @@ func (u *userHandlers) GetUsersHandler(c *gin.Context) {
 		})
 	}
 
+	var nextCursor string
+	if len(users) != 0 {
+		nextCursor = users[len(users)-1].UserID
+	}
 	c.JSON(http.StatusOK, domains.GetUsersResponse{
-		Users: usersResp,
+		Users:      usersResp,
+		NextCursor: nextCursor,
 	})
 }
 
